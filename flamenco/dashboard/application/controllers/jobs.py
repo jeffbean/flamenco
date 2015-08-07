@@ -62,6 +62,9 @@ def index_json():
         job_time = None
         if job_time:
             total_time = "{0} ({1})".format(total_time, seconds_to_time(job_time))
+        job_status = val['status']
+        if (job_status == 'completed' or job_status == 'archived'):
+            job_status = '<a href="http://{0}/jobs/file/output/{1}">{2}</a>'.format(FLAMENCO_SERVER, key, job_status)
 
         time_elapsed = val['time_elapsed']
         if time_elapsed == None:
@@ -80,7 +83,7 @@ def index_json():
             'time_remaining' : remaining_time,
             'time_average' : average_time,
             'time_total' : total_time,
-            'status' : val['status'],
+            'status' : job_status,
             'date_creation' : val['creation_date'],
             'date_edit' : val['date_edit'],
             'priority' : val['priority'],
