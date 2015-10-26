@@ -1,44 +1,35 @@
 import logging
 import os
 import json
+from pprint import pformat
 import shutil
-import requests
 import time
 import random
 import string
 from datetime import datetime
-from PIL import Image
-from os import listdir
 from os.path import join
-from os.path import exists
-from shutil import rmtree
 from functools import partial
-from sqlalchemy import or_
-from sqlalchemy.orm import Load
 from zipfile import ZipFile
 
+from PIL import Image
+from sqlalchemy import or_
 from flask import jsonify
 from flask import Response
 from flask import request
 from flask import send_from_directory
-
 from flask.ext.restful import Resource
 from flask.ext.restful import reqparse
 from flask.ext.restful import marshal_with
+
 from flask.ext.restful import fields
 
 from werkzeug.datastructures import FileStorage
 
-
 from application import db
 from application import app
 from application.utils import list_integers_string
-
-from application.modules.tasks import TaskApi
-from application.modules.tasks import TaskListApi
+from application.modules.tasks import TaskListApi, TaskApi
 from application.modules.tasks.model import Task
-from application.modules.settings.model import Setting
-from application.modules.projects.model import Project
 from application.modules.jobs.model import Job
 from application.modules.jobs.model import JobManagers
 from application.modules.managers.model import Manager
@@ -56,7 +47,7 @@ job_parser = reqparse.RequestParser()
 job_parser.add_argument('project_id', type=int)
 job_parser.add_argument('name', type=str)
 job_parser.add_argument('priority', type=int)
-job_parser.add_argument('start_job', type=str) # Casting to bool does not work
+job_parser.add_argument('start_job', type=str)  # Casting to bool does not work
 job_parser.add_argument('managers', type=int, action='append')
 job_parser.add_argument('type', type=str)
 job_parser.add_argument('settings', type=str)
@@ -83,8 +74,8 @@ job_fields = {
     'notes': fields.String
 }
 
-class jobInfo():
 
+class jobInfo():
     @staticmethod
     def get_overview(job):
         """Simple method to be merged with get. We use this temporarily for the
@@ -146,10 +137,10 @@ class jobInfo():
             'manager': {
                 'name': job.manager_list[0].manager.name,
                 'logo': job.manager_list[0].manager.logo
-                },
+            },
             'tasks_status': tasks_status,
             'username': username,
-            }
+        }
         return job_info
 
     @staticmethod
@@ -159,7 +150,7 @@ class jobInfo():
         # Collect all tasks related to the job
         tasks = Task.query.filter_by(job_id=job.id).all()
         # Query again, but filtering only for completed jobs (refactor this!)
-        tasks_completed = Task.query\
+        tasks_completed = Task.query \
             .filter_by(job_id=job.id, status='completed').count()
 
         # Default completion value
@@ -191,7 +182,6 @@ class jobInfo():
             chunk_size = job_settings['chunk_size']
         except KeyError:
             chunk_size = None
-
 
         for task in tasks:
             try:
@@ -280,7 +270,7 @@ class jobInfo():
             "average_time_frame": average_time_frame,
             "notes": job.notes,
             "user": user
-            }
+        }
         return job_info
 
 
@@ -300,9 +290,9 @@ class JobListApi(Resource):
         else:
             # Otherwise we provide all jobs that have not been archived
             jobs_query = Job.query.filter(Job.status != 'archived').all()
-        for job in jobs_query :
+        for job in jobs_query:
             jobs[job.id] = jobInfo.get_overview(job)
-
+        print(pformat(jobs))
         return jsonify(jobs)
 
     def respawn(self, job_id):
@@ -313,18 +303,18 @@ class JobListApi(Resource):
 
             tasks = db.session.query(Task).filter(
                 Task.job_id == job_id, Task.status.notin_(
-                    ['completed','failed'])).all()
+                    ['completed', 'failed'])).all()
             best_managers = db.session.query(Manager).join(
-                JobManagers, Manager.id == JobManagers.manager_id)\
-                    .filter(JobManagers.job_id == job_id)\
-                    .filter(Manager.has_virtual_workers == 1)\
-                    .first()
+                JobManagers, Manager.id == JobManagers.manager_id) \
+                .filter(JobManagers.job_id == job_id) \
+                .filter(Manager.has_virtual_workers == 1) \
+                .first()
 
             if best_managers:
                 fun = partial(TaskApi.start_task, best_managers)
                 map(fun, tasks)
             else:
-                map(lambda t : setattr(t, 'status', 'waiting'), tasks)
+                map(lambda t: setattr(t, 'status', 'waiting'), tasks)
                 db.session.commit()
                 TaskApi.dispatch_tasks()
         else:
@@ -371,9 +361,6 @@ class JobListApi(Resource):
         except KeyError:
             return args, 404
 
-        args['status'] = 'waiting'
-        return args, 200
-
     @marshal_with(job_fields)
     def post(self):
         args = job_parser.parse_args()
@@ -414,14 +401,14 @@ class JobListApi(Resource):
                 user_id = user.id
 
         job = Job(
-           project_id=args['project_id'],
-           settings=args['settings'],
-           name=args['name'],
-           status=status,
-           type=args['type'],
-           priority=args['priority'],
-           date_edit=datetime.now(),
-           user_id=user_id)
+            project_id=args['project_id'],
+            settings=args['settings'],
+            name=args['name'],
+            status=status,
+            type=args['type'],
+            priority=args['priority'],
+            date_edit=datetime.now(),
+            user_id=user_id)
 
         db.session.add(job)
         db.session.commit()
@@ -444,7 +431,6 @@ class JobListApi(Resource):
         # If we provided a file with the request, we save it there
         if args['jobfile']:
             args['jobfile'].save(join(jobpath, 'jobfile_{0}.zip'.format(job.id)))
-
 
         allowed_managers = args['managers']
         for m in allowed_managers:
@@ -475,15 +461,15 @@ class JobApi(Resource):
                 return job
             elif commands['command'] == 'stop':
                 self.stop(job_id)
-                return job # stop job
+                return job  # stop job
             elif commands['command'] == 'reset':
-                return job # reset job
+                return job  # reset job
             elif commands['command'] == 'archive':
                 self.archive(job_id)
-                return job # archive job
+                return job  # archive job
             else:
                 response = jsonify({
-                    'code' : 400,
+                    'code': 400,
                     'message': 'Unknown command. Try "start", "stop" or "reset"'})
                 response.status_code = 400
                 return response
@@ -516,10 +502,10 @@ class JobApi(Resource):
                 log = "Status changed from {0} to {1}".format(job.status, 'waiting')
                 job.date_edit = datetime.now()
                 job.status = 'waiting'
-                db.session.query(Task)\
-                    .filter(Task.job_id == job_id)\
+                db.session.query(Task) \
+                    .filter(Task.job_id == job_id) \
                     .filter(or_(Task.status == 'canceled',
-                                Task.status == 'failed'))\
+                                Task.status == 'failed')) \
                     .update({'status': 'waiting'})
                 db.session.commit()
                 log_to_database(job_id, 'job', log)
@@ -553,7 +539,7 @@ class JobApi(Resource):
             if job.status in ['active', 'waiting']:
                 logging.error("Job {0} is running".format(job_id))
                 response = jsonify({
-                    'code' : 400,
+                    'code': 400,
                     'message': "This job is running, stop it first."})
                 response.status_code = 400
                 return response
@@ -605,14 +591,14 @@ class JobDeleteApi(Resource):
             TaskApi.delete_tasks(j)
             job = Job.query.get(j)
             if job:
-                #path = join(job.project.render_path_server, str(j))
-                #Security check
-                #insecure_names=[None, "", "/", "\\", ".", ".."]
-                #if job.project.render_path_server not in insecure_names and str(j) not in insecure_names:
+                # path = join(job.project.render_path_server, str(j))
+                # Security check
+                # insecure_names=[None, "", "/", "\\", ".", ".."]
+                # if job.project.render_path_server not in insecure_names and str(j) not in insecure_names:
                 #    if exists(path):
                 #        rmtree(path)
 
-                db.session.query(JobManagers)\
+                db.session.query(JobManagers) \
                     .filter(JobManagers.job_id == job.id).delete()
                 db.session.delete(job)
                 db.session.commit()
@@ -627,7 +613,9 @@ class JobDeleteApi(Resource):
 class JobThumbnailListApi(Resource):
     """Thumbnail list interface for the Server
     """
-    def allowed_file(self, filename):
+
+    @staticmethod
+    def allowed_file(filename):
         """Filter extensions acording to THUMBNAIL_EXTENSIONS configuration.
         """
         return '.' in filename and \
@@ -641,8 +629,8 @@ class JobThumbnailListApi(Resource):
         thumbnail_filename = "thumbnail_{0}.png".format(task.job_id)
         thumbnail_file = request.files['file']
         if thumbnail_file and self.allowed_file(thumbnail_file.filename):
-            filepath = join( app.config['TMP_FOLDER'] , thumbnail_filename)
-            filepath_last = join( app.config['TMP_FOLDER'] , 'thumbnail_0.png')
+            filepath = join(app.config['TMP_FOLDER'], thumbnail_filename)
+            filepath_last = join(app.config['TMP_FOLDER'], 'thumbnail_0.png')
             thumbnail_file.save(filepath)
             shutil.copy2(filepath, filepath_last)
         else:
@@ -690,7 +678,6 @@ class JobThumbnailApi(Resource):
             else:
                 logging.error("Generic error making the thumbnail")
                 return None
-
 
         def generate(job_id, size):
             """Generate a thumbnail for the requested job id, at the requested
@@ -755,7 +742,6 @@ class JobThumbnailApi(Resource):
 
 
 class JobFileApi(Resource):
-
     def get(self, job_id):
         """Given a job_id returns the jobzip file
         """

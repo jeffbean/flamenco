@@ -9,6 +9,7 @@
   <span class="navbar-brand">Jobs</span>
   <li>
     <div class="btn-group navbar-btn">
+      <div  class="btn btn-default" command="add"><a href="{{ url_for('jobs.add') }}">Add</a></div>
       <div id="job-start" class="btn btn-default" command="start">Start</div>
       <div id="job-stop" class="btn btn-default" command="stop">Stop</div>
       <div id="job-respawn" class="btn btn-default disabled" command="respawn">Respawn</div>
@@ -49,7 +50,7 @@
           <tr>
             <th>Key</th>
             <th>Value</th>
-          </th>
+          </tr>
         </thead>
         <tbody id="tasks-view-table-body">
         </tbody>
@@ -122,7 +123,7 @@
             <tr>
               <th>Key</th>
               <th>Val</th>
-            </th>
+            </tr>
           </thead>
           <tbody id="jobs-view-table-body">
           </tbody>
@@ -135,7 +136,7 @@
             <tr>
               <th>Date</th>
               <th>Event</th>
-            </th>
+            </tr>
           </thead>
           <tbody id="jobs-log-table-body">
           </tbody>

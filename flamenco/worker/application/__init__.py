@@ -3,7 +3,9 @@ import tempfile
 import logging
 # from threading import Thread
 from flask import Flask
+
 app = Flask(__name__)
+
 
 def clean_dir(cleardir, keep_job=None):
     if os.path.exists(cleardir):
@@ -17,13 +19,15 @@ def clean_dir(cleardir, keep_job=None):
                     continue
                 os.rmdir(os.path.join(root, name))
 
+
 try:
     # Load config.py if available
     import config
+
     app.config.update(
-        FLAMENCO_MANAGER = config.Config.FLAMENCO_MANAGER,
-        TMP_FOLDER = config.Config.TMP_FOLDER,
-        PORT = config.Config.PORT,
+        FLAMENCO_MANAGER=config.Config.FLAMENCO_MANAGER,
+        TMP_FOLDER=config.Config.TMP_FOLDER,
+        PORT=config.Config.PORT,
     )
 except ImportError:
     # If we don't find the config.py we use the following defaults
@@ -41,7 +45,7 @@ clean_dir(tmp_folder)
 
 # Use multiprocessing to register the client the worker to the server
 # while the worker app starts up
-#def run(user_config=None):
+# def run(user_config=None):
 #    config = controllers.app.config
 #
 #    if user_config:

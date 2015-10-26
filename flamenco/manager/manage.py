@@ -1,22 +1,19 @@
 #! /usr/bin/env python
 import os
-import logging
 import socket
-import requests
 import json
-from threading import Thread
 
 from flask.ext.script import Manager
 from flask.ext.migrate import MigrateCommand
 from flask.ext.migrate import upgrade
 
 from sqlalchemy import create_engine
+
 from alembic.migration import MigrationContext
 
 from application import app
 from application import db
 from application import register_manager
-
 from application.modules.job_types.model import JobType
 
 manager = Manager(app)
@@ -40,6 +37,7 @@ def runserver():
 
     try:
         from application import config
+
         PORT = config.Config.PORT
         DEBUG = config.Config.DEBUG
         HOST = config.Config.HOST
@@ -56,11 +54,11 @@ def runserver():
     # Render Config
     render_config = JobType.query.filter_by(name='simple_blender_render').first()
     if not render_config:
-        configuration = {'commands' : {
-            'default' : {
-                'Linux' : '',
-                'Darwin' : '',
-                'Windows' : ''
+        configuration = {'commands': {
+            'default': {
+                'Linux': '',
+                'Darwin': '',
+                'Windows': ''
             }
         }}
         print("Please enter the shared blender path for the simple_blender_render command")
@@ -80,11 +78,11 @@ def runserver():
     # Bake config
     bake_config = JobType.query.filter_by(name='blender_bake_anim_cache').first()
     if not bake_config:
-        configuration = {'commands' : {
-            'default' : {
-                'Linux' : '',
-                'Darwin' : '',
-                'Windows' : ''
+        configuration = {'commands': {
+            'default': {
+                'Linux': '',
+                'Darwin': '',
+                'Windows': ''
             }
         }}
         print("Please enter the shared blender path for the blender_bake_anim_cache command")

@@ -2,45 +2,35 @@ import os
 import logging
 import json
 from tempfile import mkdtemp
-from PIL import Image
-from platform import system
-from threading import Thread
-from sqlalchemy import func
-from sqlalchemy import or_
 from decimal import Decimal
 from zipfile import ZipFile
-from lockfile import LockFile, LockTimeout
+from datetime import datetime
 
-from flask import abort
+from PIL import Image
+from sqlalchemy import or_
+from lockfile import LockFile, LockTimeout
 from flask import jsonify
-from flask import render_template
 from flask import request
 from flask import send_from_directory
 from flask.ext.restful import Resource
 from flask.ext.restful import reqparse
 
+from requests.exceptions import ConnectionError
+
+from werkzeug.datastructures import FileStorage
+
 from application import app
 from application import db
-
-from datetime import datetime
-from datetime import timedelta
-
 from application.utils import http_rest_request
 from application.utils import get_file_ext
 from application.utils import pretty_date
 from application.utils import frame_range_parse
 from application.utils import frame_range_merge
-
 from application.modules.tasks.model import Task
 from application.modules.managers.model import Manager
 from application.modules.jobs.model import Job
 from application.modules.projects.model import Project
-from application.modules.settings.model import Setting
 from application.modules.jobs.model import JobManagers
-
-from requests.exceptions import ConnectionError
-
-from werkzeug.datastructures import FileStorage
 
 task_parser = reqparse.RequestParser()
 task_parser.add_argument('id', type=int)
@@ -65,6 +55,7 @@ task_generator_parser.add_argument('uuid', type=str)
 task_generator_parser.add_argument('job_types', type=str)
 task_generator_parser.add_argument('worker', type=str)
 
+
 class TaskApi(Resource):
     @staticmethod
     def create_task(job_id, task_type, task_settings, name, child_id, parser):
@@ -74,18 +65,18 @@ class TaskApi(Resource):
         job = Job.query.get(job_id)
 
         task = Task(job_id=job_id,
-            name=name,
-            type=task_type,
-            settings=json.dumps(task_settings),
-            status='waiting',
-            priority=job.priority,
-            manager_id = manager.manager_id,
-            log=None,
-            time_cost=None,
-            activity=None,
-            child_id=child_id,
-            parser=parser,
-            )
+                    name=name,
+                    type=task_type,
+                    settings=json.dumps(task_settings),
+                    status='waiting',
+                    priority=job.priority,
+                    manager_id=manager.manager_id,
+                    log=None,
+                    time_cost=None,
+                    activity=None,
+                    child_id=child_id,
+                    parser=parser,
+                    )
         db.session.add(task)
         db.session.commit()
         return task.id
@@ -93,7 +84,7 @@ class TaskApi(Resource):
     @staticmethod
     def create_tasks(job):
         """Send the job to the Job Compiler"""
-        #from application.job_compilers.simple_blender_render import job_compiler
+        # from application.job_compilers.simple_blender_render import job_compiler
         module_name = 'application.job_compilers.{0}'.format(job.type)
         job_compiler = None
         try:
@@ -103,7 +94,7 @@ class TaskApi(Resource):
             print('Cant find module {0}: {1}'.format(module_name, e))
             return
 
-        project = Project.query.filter_by(id = job.project_id).first()
+        project = Project.query.filter_by(id=job.project_id).first()
         job_compiler.compile(job, project, TaskApi.create_task)
 
     @staticmethod
@@ -113,13 +104,12 @@ class TaskApi(Resource):
         way to get the additional job information - should be done with join)
         """
 
-        params={'priority':task.priority,
-            'type':task.type,
-            'parser':task.parser,
-            'task_id':task.id,
-            'job_id':task.job_id,
-            'settings':task.settings}
-
+        params = {'priority': task.priority,
+                  'type': task.type,
+                  'parser': task.parser,
+                  'task_id': task.id,
+                  'job_id': task.job_id,
+                  'settings': task.settings}
 
         task.status = 'active'
         task.manager_id = manager.id
@@ -140,7 +130,7 @@ class TaskApi(Resource):
             zippath = os.path.join(jobpath, "jobfile_{0}.zip".format(job.id))
             try:
                 jobfile = [('jobfile',
-                    ('jobfile.zip', open(zippath, 'rb'), 'application/zip'))]
+                            ('jobfile.zip', open(zippath, 'rb'), 'application/zip'))]
             except IOError, e:
                 logging.error(e)
             try:
@@ -157,7 +147,7 @@ class TaskApi(Resource):
             task.manager_id = manager.id
             db.session.add(task)
             db.session.commit()
-        # TODO  get a reply from the worker (running, error, etc)
+            # TODO  get a reply from the worker (running, error, etc)
 
     @staticmethod
     def delete_task(task_id):
@@ -186,7 +176,7 @@ class TaskApi(Resource):
         managers = {}
         for task_id in task_ids:
             task = Task.query.get(task_id)
-            manager = Manager.query.filter_by(id = task.manager_id).first()
+            manager = Manager.query.filter_by(id=task.manager_id).first()
             if not manager.id in managers:
                 managers[manager.id] = []
             if manager.has_virtual_workers == 0:
@@ -207,15 +197,15 @@ class TaskApi(Resource):
             task.status = 'waiting'
             db.session.add(task)
             db.session.commit()
-        #print "Task %d stopped" % task_id
+            # print "Task %d stopped" % task_id
 
     @staticmethod
     def stop_tasks(job_id):
         """We stop all the tasks for a specific job
         """
-        tasks = Task.query\
-            .filter_by(job_id=job_id)\
-            .filter(or_(Task.status == 'active', Task.status == 'waiting'))\
+        tasks = Task.query \
+            .filter_by(job_id=job_id) \
+            .filter(or_(Task.status == 'active', Task.status == 'waiting')) \
             .all()
 
         # print tasks
@@ -228,7 +218,7 @@ class TaskApi(Resource):
     @staticmethod
     def generate_thumbnails(job, start, end):
         # FIXME problem with PIL (string index out of range)
-        #thumb_dir = RENDER_PATH + "/" + str(job.id)
+        # thumb_dir = RENDER_PATH + "/" + str(job.id)
         project = Project.query.get(job.project_id)
         thumbnail_dir = os.path.join(
             project.render_path_server,
@@ -239,9 +229,9 @@ class TaskApi(Resource):
             os.makedirs(thumbnail_dir)
         for i in range(start, end + 1):
             # TODO make generic extension
-            #img_name = ("0" if i < 10 else "") + str(i) + get_file_ext(job.format)
+            # img_name = ("0" if i < 10 else "") + str(i) + get_file_ext(job.format)
             img_name = '{0:05d}'.format(i) + get_file_ext(job.format)
-            #file_path = thumb_dir + "/" + str(i) + '.thumb'
+            # file_path = thumb_dir + "/" + str(i) + '.thumb'
             file_path = os.path.join(thumbnail_dir, '{0:05d}'.format(i), '.thumb')
             # We can't generate thumbnail from multilayer with pillow
             if job.format != "MULTILAYER":
@@ -255,11 +245,11 @@ class TaskApi(Resource):
                 img.save(thumbnail_path, job.format)
 
     def generate_job_tasks_status(self, job):
-        tasks_completed = Task.query\
+        tasks_completed = Task.query \
             .filter_by(job_id=job.id, status='completed').count()
-        tasks_failed = Task.query\
+        tasks_failed = Task.query \
             .filter_by(job_id=job.id, status='failed').count()
-        tasks_canceled = Task.query\
+        tasks_canceled = Task.query \
             .filter_by(job_id=job.id, status='canceled').count()
         tasks_count = job.tasks.count()
 
@@ -309,7 +299,6 @@ class TaskApi(Resource):
         # Push changes to database
         task.settings = json.dumps(settings)
         db.session.commit()
-
 
     def put(self, task_id):
         args = task_parser.parse_args()
@@ -366,8 +355,8 @@ class TaskApi(Resource):
             if taskfile.filename.endswith('.zip'):
                 tmp_path = mkdtemp()
                 taskfile = os.path.join(
-                        tmp_path,
-                        'taskfileout_{0}_{1}.zip'.format(job.id, task_id))
+                    tmp_path,
+                    'taskfileout_{0}_{1}.zip'.format(job.id, task_id))
                 args['taskfile'].save(taskfile)
 
                 zippath = os.path.join(jobpath, 'output')
@@ -377,7 +366,7 @@ class TaskApi(Resource):
                         jobzip.extractall(path=zippath)
                 except:
                     logging.error("Unable to extract zipfile.")
-                    #os.remove(zippath)
+                    # os.remove(zippath)
                     return '', 404
 
                 os.remove(taskfile)
@@ -391,7 +380,7 @@ class TaskApi(Resource):
             TaskApi.frames_update_statuses(task, args['frames'], 'completed')
 
 
-        #job.tasks_status = json.dumps(self.generate_job_tasks_status(job))
+        # job.tasks_status = json.dumps(self.generate_job_tasks_status(job))
 
         status_old = task.status
         task.status = status
@@ -409,7 +398,7 @@ class TaskApi(Resource):
 
             # Check if all tasks have been completed
             tasks = Task.query.filter_by(job_id=job.id).all()
-            if all((lambda t : t.status in ['completed', 'failed'])(t) for t in tasks):
+            if all((lambda t: t.status in ['completed', 'failed'])(t) for t in tasks):
                 failed_tasks = Task.query.filter_by(job_id=job.id, status='failed').count()
                 logging.debug("{0} tasks failed before".format(failed_tasks))
                 if failed_tasks > 0 or status == 'failed':
@@ -520,32 +509,33 @@ class TaskGeneratorApi(Resource):
             ip_address = request.remote_addr
             manager = Manager.query.filter_by(ip_address=ip_address).first()
         if not manager:
+            print('Could not find manager, returning 404')
             return '', 404
 
         # Get active Jobs
         if job_types:
             job_types_list = job_types.split(',')
             job_type_clauses = or_(*[Job.type == j for j in job_types_list])
-            active_jobs = Job.query\
-                .filter(job_type_clauses)\
+            active_jobs = Job.query \
+                .filter(job_type_clauses) \
                 .filter(or_(
-                    Job.status == 'waiting',
-                    Job.status == 'active'))\
-                .order_by(Job.priority.desc(), Job.id.asc())\
+                Job.status == 'waiting',
+                Job.status == 'active')) \
+                .order_by(Job.priority.desc(), Job.id.asc()) \
                 .all()
         else:
-            active_jobs = Job.query\
+            active_jobs = Job.query \
                 .filter(or_(
-                    Job.status == 'waiting',
-                    Job.status == 'active'))\
-                .order_by(Job.priority.desc(), Job.id.asc())\
+                Job.status == 'waiting',
+                Job.status == 'active')) \
+                .order_by(Job.priority.desc(), Job.id.asc()) \
                 .all()
 
-        lock = LockFile("{0}server.lock".format(app.config['TMP_FOLDER']))
+        lock = LockFile(os.path.join(app.config['TMP_FOLDER'], 'server.lock'))
 
         while not lock.i_am_locking():
             try:
-                lock.acquire(timeout=60)    # wait up to 60 seconds
+                lock.acquire(timeout=60)  # wait up to 60 seconds
             except LockTimeout:
                 lock.break_lock()
                 lock.acquire()
@@ -555,7 +545,7 @@ class TaskGeneratorApi(Resource):
                 Task.job_id == job.id,
                 or_(Task.status == 'waiting',
                     Task.status == 'canceled'),
-                Task.manager_id == manager.id).\
+                Task.manager_id == manager.id). \
                 order_by(Task.priority.desc(), Task.id.desc())
             task = None
             incomplete_parents = False
@@ -578,6 +568,7 @@ class TaskGeneratorApi(Resource):
             # Unlocking Task table on ROLLBACK
             db.session.rollback()
             lock.release()
+            print('Unlocking Task table on ROLLBACK, returning 404')
             return '', 404
 
         task.status = 'processing'
@@ -588,7 +579,7 @@ class TaskGeneratorApi(Resource):
         db.session.commit()
         lock.release()
 
-        #job = Job.query.get(task.job_id)
+        # job = Job.query.get(task.job_id)
 
         frame_count = 1
         current_frame = 0

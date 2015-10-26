@@ -302,8 +302,7 @@ class TaskManagementApi(Resource):
             '/tasks/generate', task_generate_params)
 
         r = http_request(
-            app.config['FLAMENCO_SERVER'], joined_tasks_generate_url,
-            'get')
+            app.config['FLAMENCO_SERVER'], joined_tasks_generate_url, 'get')
 
         return r, 200
 

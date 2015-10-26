@@ -1,5 +1,4 @@
 import socket
-import urllib
 import time
 import subprocess
 import platform
@@ -7,26 +6,21 @@ import os
 import json
 import shutil
 import select
-import requests
 import logging
 from zipfile import ZipFile
 from zipfile import BadZipfile
 from zipfile import zlib
 from threading import Thread
 from threading import Lock
-from threading import Timer
-import Queue # for windows
-
-from flask import redirect
-from flask import url_for
-from flask import request
-from flask import jsonify
-
+import Queue  # for windows
 from uuid import getnode as get_mac_address
+
+import requests
+
+from requests.exceptions import ConnectionError
 
 from application import app
 from application import clean_dir
-from requests.exceptions import ConnectionError
 
 MAC_ADDRESS = get_mac_address()  # the MAC address of the worker
 HOSTNAME = socket.gethostname()  # the hostname of the worker
@@ -39,7 +33,6 @@ LOG = None
 TIME_INIT = None
 CONNECTIVITY = False
 FLAMENCO_MANAGER = app.config['FLAMENCO_MANAGER']
-
 
 if platform.system() is not 'Windows':
     from fcntl import fcntl, F_GETFL, F_SETFL
@@ -89,6 +82,7 @@ def http_request(ip_address, command, method, params=None, files=None):
 
     return r.json()
 
+
 def register_worker():
     """This is going to be an HTTP request to the server with all the info
     for registering the render node.
@@ -98,6 +92,7 @@ def register_worker():
     while True:
         try:
             r = http_request(app.config['FLAMENCO_MANAGER'], '/', 'get')
+            print('Request {}'.format(r))
             CONNECTIVITY = True
             break
         except ConnectionError:
@@ -106,17 +101,19 @@ def register_worker():
                     app.config['FLAMENCO_MANAGER']))
             CONNECTIVITY = False
             pass
-        time.sleep(1)
+        time.sleep(3)
 
-    http_request(app.config['FLAMENCO_MANAGER'], '/workers', 'post',
-        params={
-            'port': app.config['PORT'],
-            'hostname': HOSTNAME,
-            'system': SYSTEM})
+    post_req = http_request(app.config['FLAMENCO_MANAGER'], '/workers', 'post',
+                 params={
+                     'port': app.config['PORT'],
+                     'hostname': HOSTNAME,
+                     'system': SYSTEM})
+    print('Posting request: {}'.format(post_req))
 
 def get_task():
     manager_url = "http://{0}/tasks".format(app.config['FLAMENCO_MANAGER'])
     return requests.get(manager_url)
+
 
 def getZipFile(url, tmpfile, zippath, force=False):
     if not os.path.exists(tmpfile) or force:
@@ -128,7 +125,7 @@ def getZipFile(url, tmpfile, zippath, force=False):
         with open(tmpfile, 'wb') as f:
             try:
                 for chunk in r.iter_content(chunk_size=1024):
-                    if chunk: # filter out keep-alive new chunks
+                    if chunk:  # filter out keep-alive new chunks
                         f.write(chunk)
                         f.flush()
             except KeyboardInterrupt:
@@ -136,7 +133,7 @@ def getZipFile(url, tmpfile, zippath, force=False):
 
     if not os.path.exists(zippath):
         os.mkdir(zippath)
-    print ( "Extracting {0}".format(tmpfile))
+    print ("Extracting {0}".format(tmpfile))
     unzipok = True
     try:
         with ZipFile(tmpfile, 'r') as jobzip:
@@ -156,6 +153,7 @@ def getZipFile(url, tmpfile, zippath, force=False):
 
     return unzipok
 
+
 def update():
     global PROCESS
     global LOCK
@@ -169,12 +167,14 @@ def update():
     else:
         os.kill(PROCESS.pid, SIGKILL)
 
-    #LOCK.acquire()
-    #PROCESS = None
-    #LOCK.release()
+    # LOCK.acquire()
+    # PROCESS = None
+    # LOCK.release()
     return '', 204
 
+
 global LOOP_THREAD
+
 
 def worker_loop():
     register_worker()
@@ -204,18 +204,17 @@ def worker_loop():
             'activity': None,
             'time_cost': 0,
             'job_id': task['job_id'],
-            }
+        }
         try:
             requests.patch(
                 'http://' + app.config['FLAMENCO_MANAGER'] + '/tasks/' + str(task['task_id']),
-            data = params
+                data=params
             )
             CONNECTIVITY = True
         except ConnectionError:
             logging.error(
                 'Cant connect with the Manager {0}'.format(app.config['FLAMENCO_MANAGER']))
             CONNECTIVITY = False
-
 
         tmp_folder = os.path.join(app.config['TMP_FOLDER'], 'flamenco-worker')
         clean_dir(tmp_folder, task['job_id'])
@@ -232,7 +231,7 @@ def worker_loop():
         tmpfile = os.path.join(
             jobpath, 'taskfile_{0}.zip'.format(task['job_id']))
         url = "http://{0}/tasks/zip/{1}".format(
-                app.config['FLAMENCO_MANAGER'], task['job_id'])
+            app.config['FLAMENCO_MANAGER'], task['job_id'])
         unzipok = getZipFile(url, tmpfile, zippath)
 
         # Get support file
@@ -241,7 +240,7 @@ def worker_loop():
         tmpfile = os.path.join(
             jobpath, 'tasksupportfile_{0}.zip'.format(task['job_id']))
         url = "http://{0}/tasks/zip/sup/{1}".format(
-                app.config['FLAMENCO_MANAGER'], task['job_id'])
+            app.config['FLAMENCO_MANAGER'], task['job_id'])
         unzipok = getZipFile(url, tmpfile, zippath, True)
 
         # Get dependency file
@@ -249,7 +248,7 @@ def worker_loop():
         tmpfile = os.path.join(
             jobpath, 'dependencies.zip'.format(task['job_id']))
         url = "http://{0}/tasks/zip/dep/{1}".format(
-                app.config['FLAMENCO_MANAGER'], task['job_id'], task['task_id'])
+            app.config['FLAMENCO_MANAGER'], task['job_id'], task['task_id'])
         print ("Fetching dependency {0}".format(url))
         unzipdepok = getZipFile(url, tmpfile, zippath)
 
@@ -276,15 +275,16 @@ def worker_loop():
         print ("[{0}] Worker is disabled".format(HOSTNAME))
     elif rtask.status_code == 400:
         print ("[{0}] No task available".format(HOSTNAME))
-    #LOOP_THREAD = Timer(5, worker_loop)
-    #LOOP_THREAD.start()
+        # LOOP_THREAD = Timer(5, worker_loop)
+        # LOOP_THREAD.start()
+
 
 def _checkProcessOutput(process):
     try:
         # If the PROCESS halts, will halt here
         ready = select.select([process.stdout.fileno(),
-                            process.stderr.fileno()],
-                            [], [])
+                               process.stderr.fileno()],
+                              [], [])
     except KeyboardInterrupt:
         raise
         return
@@ -301,6 +301,7 @@ def _checkProcessOutput(process):
             full_buffer += buffer
     return full_buffer
 
+
 def _checkOutputThreadWin(fd, q):
     while True:
         buffer = os.read(fd, 1024)
@@ -309,6 +310,7 @@ def _checkOutputThreadWin(fd, q):
         else:
             print buffer
             q.put(buffer)
+
 
 def _checkProcessOutputWin(process, q):
     full_buffer = ''
@@ -322,6 +324,7 @@ def _checkProcessOutputWin(process, q):
         full_buffer += buffer
     return full_buffer
 
+
 def send_thumbnail(manager_url, file_path, params):
     try:
         thumbnail_file = open(file_path, 'r')
@@ -333,6 +336,7 @@ def send_thumbnail(manager_url, file_path, params):
     except ConnectionError:
         logging.error("Can't send Thumbnail to manager: {0}".format(manager_url))
     thumbnail_file.close()
+
 
 def _parse_output(tmp_buffer, options):
     global ACTIVITY
@@ -370,7 +374,7 @@ def _parse_output(tmp_buffer, options):
 
     time_init = TIME_INIT
     if time_init:
-        time_cost=int(time.time())-time_init
+        time_cost = int(time.time()) - time_init
 
     else:
         logging.error("time_init is None")
@@ -383,7 +387,7 @@ def _parse_output(tmp_buffer, options):
         'time_cost': time_cost,
         'job_id': options['job_id'],
         'task_id': options['task_id'],
-        }
+    }
     r = None
     try:
         r = requests.patch(
@@ -401,7 +405,7 @@ def _parse_output(tmp_buffer, options):
         print ("Stopping Task: {0}".format(r.status_code))
         action.append('stop')
 
-    #if activity.get('path_not_found'):
+    # if activity.get('path_not_found'):
     #    print ("Path not Found")
     #    # action.append('stop')
 
@@ -413,6 +417,7 @@ def _parse_output(tmp_buffer, options):
     f.write(tmp_buffer)
     f.close()
     return action
+
 
 def _interactiveReadProcessWin(process, options):
     full_buffer = ''
@@ -439,6 +444,7 @@ def _interactiveReadProcessWin(process, options):
     # full_buffer += _checkProcessOutputWin(process, q)
     return (process.returncode, full_buffer)
 
+
 def _interactiveReadProcess(process, options):
     full_buffer = ''
     tmp_buffer = ''
@@ -460,6 +466,7 @@ def _interactiveReadProcess(process, options):
 
     return (process.returncode, full_buffer)
 
+
 def clear_dir(cleardir):
     if os.path.exists(cleardir):
         for root, dirs, files in os.walk(cleardir, topdown=False):
@@ -467,6 +474,7 @@ def clear_dir(cleardir):
                 os.remove(os.path.join(root, name))
             for name in dirs:
                 os.rmdir(os.path.join(root, name))
+
 
 def run_blender_in_thread(options):
     """We take the command and run it
@@ -507,9 +515,9 @@ def run_blender_in_thread(options):
 
     for cmd, val in enumerate(render_command):
         render_command[cmd] = render_command[cmd].replace(
-            "==jobpath==",jobpath)
+            "==jobpath==", jobpath)
         render_command[cmd] = render_command[cmd].replace(
-            "==outputpath==",outputpath)
+            "==outputpath==", outputpath)
         render_command[cmd] = render_command[cmd].replace(
             "==command==",
             compiler_settings['commands'][command_name][PLATFORM])
@@ -518,7 +526,7 @@ def run_blender_in_thread(options):
     os.environ['WORKER_OUTPUTPATH'] = outputpath
     os.environ['WORKER_JOBPATH'] = jobpath
 
-    print ( "Running:")
+    print ("Running:")
     for cmd in render_command:
         print (cmd)
 
@@ -534,8 +542,8 @@ def run_blender_in_thread(options):
         flags = fcntl(PROCESS.stderr, F_GETFL)
         fcntl(PROCESS.stderr, F_SETFL, flags | os.O_NONBLOCK)
 
-    #flask.g.blender_process = process
-    (retcode, full_output) =  _interactiveReadProcess(PROCESS, options) \
+    # flask.g.blender_process = process
+    (retcode, full_output) = _interactiveReadProcess(PROCESS, options) \
         if (platform.system() is not "Windows") \
         else _interactiveReadProcessWin(PROCESS, options)
 
@@ -544,8 +552,8 @@ def run_blender_in_thread(options):
     time_init = TIME_INIT
 
 
-    #flask.g.blender_process = None
-    #print(full_output)
+    # flask.g.blender_process = None
+    # print(full_output)
     script_dir = os.path.dirname(__file__)
     rel_path = 'render_log_' + HOSTNAME + '.log'
     abs_file_path = os.path.join(script_dir, rel_path)
@@ -566,7 +574,7 @@ def run_blender_in_thread(options):
     logging.debug(status)
 
     if time_init:
-        time_cost = int(time.time())-time_init
+        time_cost = int(time.time()) - time_init
     else:
         time_cost = 0
         logging.error("time_init is None")
@@ -601,7 +609,7 @@ def run_blender_in_thread(options):
     )
 
     if 'storage' in compiler_settings and \
-            'type' in compiler_settings['storage']:
+                    'type' in compiler_settings['storage']:
         storage_settings = compiler_settings['storage']
         if storage_settings['type'] == 'filesystem':
             logging.info("Copying files via filesystem")
@@ -622,6 +630,7 @@ def run_blender_in_thread(options):
             server = storage_settings['server']
             path = storage_settings['path']
             from ftplib import FTP
+
             ftp = FTP(server)
             ftp.login()
             ftp.cwd(path)
@@ -631,7 +640,7 @@ def run_blender_in_thread(options):
                     # TODO crossplataform?:
                     serverpath = os.path.join(path, str(options['job_id']))
                     file_ = open(filepath, 'rb')
-                    ftp.storbinary('STOR '+str(fname), file_)
+                    ftp.storbinary('STOR ' + str(fname), file_)
                     file_.close()
             ftp.quit()
         elif storage_settings['type'] == 'scp':
@@ -645,6 +654,7 @@ def run_blender_in_thread(options):
             from paramiko import AutoAddPolicy
             from paramiko import ssh_exception
             from scp import SCPClient
+
             server = storage_settings['server']
             user = storage_settings['user']
             password = storage_settings['password']
@@ -675,14 +685,14 @@ def run_blender_in_thread(options):
 
             # TODO crossplataform?:
             filepath_remote = os.path.join(path,
-                                            str(options['job_id']))
+                                           str(options['job_id']))
             with SCPClient(ssh.get_transport()) as scp:
                 print ("Uploading via SCP")
                 try:
                     scp.put(workeroutputpath,
                             filepath_remote,
-                            recursive = True,
-                            preserve_times = True)
+                            recursive=True,
+                            preserve_times=True)
                 except scp.SCPException:
                     print ("Error uploading via SCP, SCPException")
             scp.close()
@@ -702,7 +712,7 @@ def run_blender_in_thread(options):
         'activity': activity,
         'time_cost': time_cost,
         'job_id': options['job_id'],
-        }
+    }
 
     try:
         # Send results of the task to the server
@@ -718,16 +728,17 @@ def run_blender_in_thread(options):
             'Cant connect with the Manager {0}'.format(FLAMENCO_MANAGER))
         CONNECTIVITY = False
 
-    logging.debug( 'Return code: {0}'.format(retcode) )
+    logging.debug('Return code: {0}'.format(retcode))
 
     PROCESS = None
     ACTIVITY = None
     LOG = None
     TIME_INIT = None
 
+
 def execute_task(task, files):
     global PROCESS
-    #global LOCK
+    # global LOCK
 
     if PROCESS:
         return "Error: Process failed", 500
@@ -747,16 +758,15 @@ def execute_task(task, files):
 
     options['jobpath'] = taskpath
 
-    #LOCK.acquire()
+    # LOCK.acquire()
     PROCESS = None
     LOG = None
     TIME_INIT = None
     ACTIVITY = None
 
-    #render_thread = Thread(target=run_blender_in_thread, args=(options,))
-    #render_thread.start()
-    #render_thread.join()
+    # render_thread = Thread(target=run_blender_in_thread, args=(options,))
+    # render_thread.start()
+    # render_thread.join()
     run_blender_in_thread(options)
-    #LOCK.release()
+    # LOCK.release()
     return json.dumps(dict(pid=0))
-

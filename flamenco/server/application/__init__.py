@@ -1,33 +1,35 @@
 import os
 import tempfile
+import logging
+
 from flask import Flask
 from flask import jsonify
 from flask.ext.sqlalchemy import SQLAlchemy
 from flask.ext.restful import Api
 from flask.ext.migrate import Migrate
 
-import logging
 logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-#RENDER_PATH = "render"
+# RENDER_PATH = "render"
 
 try:
     from application import config
+
     app.config['SQLALCHEMY_DATABASE_URI'] = config.Config.SQLALCHEMY_DATABASE_URI
-    app.config['TMP_FOLDER']= config.Config.TMP_FOLDER
-    app.config['THUMBNAIL_EXTENSIONS']= config.Config.THUMBNAIL_EXTENSIONS
+    app.config['TMP_FOLDER'] = config.Config.TMP_FOLDER
+    app.config['THUMBNAIL_EXTENSIONS'] = config.Config.THUMBNAIL_EXTENSIONS
     app.config['SERVER_STORAGE'] = config.Config.SERVER_STORAGE
 except ImportError:
-    #from modules.managers.model import Manager
+    # from modules.managers.model import Manager
     app.config.update(
         SQLALCHEMY_DATABASE_URI='sqlite:///' + os.path.join(os.path.dirname(__file__), '../server.sqlite'),
         TMP_FOLDER=tempfile.gettempdir(),
-        THUMBNAIL_EXTENSIONS=set(['png']),
-        SERVER_STORAGE = '{0}/static/storage'.format(
+        THUMBNAIL_EXTENSIONS={'png'},
+        SERVER_STORAGE='{0}/static/storage'.format(
             os.path.join(os.path.dirname(__file__)))
     )
 
@@ -35,29 +37,33 @@ api = Api(app)
 
 from modules.projects import ProjectListApi
 from modules.projects import ProjectApi
+
 api.add_resource(ProjectListApi, '/projects')
 api.add_resource(ProjectApi, '/projects/<int:project_id>')
 
 from modules.workers import WorkerListApi
-from modules.workers import WorkerApi
+
 api.add_resource(WorkerListApi, '/workers')
-api.add_resource(WorkerApi, '/workers/<int:worker_id>')
 
 from modules.managers import ManagerListApi
 from modules.managers import ManagerApi
+
 api.add_resource(ManagerListApi, '/managers')
 api.add_resource(ManagerApi, '/managers/<manager_uuid>')
 
 from modules.settings import SettingsListApi
 from modules.settings import ManagersSettingsApi
+
 api.add_resource(SettingsListApi, '/settings')
 api.add_resource(ManagersSettingsApi, '/settings/managers')
 
 from modules.settings import ManagerSettingApi
+
 api.add_resource(ManagerSettingApi, '/settings/managers/<int:manager_id>/<setting_name>')
 
 from modules.filebrowser import FileBrowserApi
 from modules.filebrowser import FileBrowserRootApi
+
 api.add_resource(FileBrowserRootApi, '/browse')
 api.add_resource(FileBrowserApi, '/browse/<path:path>')
 
@@ -68,6 +74,7 @@ from modules.jobs import JobThumbnailListApi
 from modules.jobs import JobThumbnailApi
 from modules.jobs import JobFileApi
 from modules.jobs import JobFileOutputApi
+
 api.add_resource(JobListApi, '/jobs')
 api.add_resource(JobApi, '/jobs/<int:job_id>')
 api.add_resource(JobDeleteApi, '/jobs/delete')
@@ -98,10 +105,9 @@ from modules.stats import stats
 app.register_blueprint(main)
 app.register_blueprint(stats, url_prefix='/stats')
 
+
 @app.errorhandler(404)
 def not_found(error):
     response = jsonify({'code': 404, 'message': 'No interface defined for URL'})
     response.status_code = 404
     return response
-
-

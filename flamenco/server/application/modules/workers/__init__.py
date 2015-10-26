@@ -1,9 +1,8 @@
-import requests
 from flask import jsonify
-from flask import abort
 from flask.ext.restful import Resource
+
 from flask.ext.restful import reqparse
-from application.utils import list_integers_string
+
 from application.utils import http_rest_request
 from application.modules.managers.model import Manager
 
@@ -16,16 +15,12 @@ class WorkerListApi(Resource):
     def get(self):
         workers = {}
         for manager in Manager.query.all():
-            if manager.has_virtual_workers:
-                continue
-            try:
-                r = http_rest_request(manager.host, '/workers', 'get')
-                for worker in r.keys():
-                    r[worker]['manager_id'] = manager.id
-                workers = dict(workers.items() + r.items())
-            except:
-                # TODO add proper exception handling!
-                pass
+            print('Precessing manager workers: {}'.format(manager.host))
+            r = http_rest_request(manager.host, '/workers', 'get')
+            for worker in r.keys():
+                r[worker]['manager_id'] = manager.id
+            workers = dict(workers.items() + r.items())
+
         return jsonify(workers)
 
     # FIXME How to get the manager from the worker
@@ -35,7 +30,7 @@ class WorkerListApi(Resource):
         pairs = args['id'].split(',')
         for par in pairs:
             int_list = par.split(';')
-            workers.append( map(int, int_list) )
+            workers.append(map(int, int_list))
 
         for worker_id, manager_id in workers:
             manager = Manager.query.get(manager_id)
@@ -46,13 +41,3 @@ class WorkerListApi(Resource):
                     'patch', dict(status=args['status']))
 
         return '', 204
-
-
-# FIXME this will probably be depreceated, because worker talk to the server
-# only via the manager.
-class WorkerApi(Resource):
-    def get(self, worker_id):
-        return abort(404)
-        worker = Worker.query.get_or_404(worker_id)
-        r = requests.get('http://' + worker.ip_address + '/run_info')
-        return r.json()
